@@ -35,7 +35,7 @@
   tr.new { animation:flash 1.6s; } @keyframes flash { from { background:#34d39933; } }
   tr.healing td { background:#fbbf2410; } tr.healing .fn { animation:blink 1s infinite; } @keyframes blink { 50% { opacity:.45; } }
   .btn { background:#ffffff0d; border:1px solid var(--line); color:var(--text); border-radius:9px; padding:5px 12px; cursor:pointer; font:inherit; font-size:12px; transition:.15s; text-decoration:none; display:inline-block; }
-  .btn:hover { background:#ffffff1a; transform:translateY(-1px); } .btn.dl:hover { border-color:var(--a); color:var(--a); } .btn.del:hover { border-color:var(--bad); color:var(--bad); }
+  .btn:hover { background:#ffffff1a; transform:translateY(-1px); } .btn.dl:hover { border-color:var(--a); color:var(--a); } .btn.force { color:var(--bad); } .btn.force:hover { background:#fb718522; border-color:var(--bad); } .btn.del:hover { border-color:var(--bad); color:var(--bad); }
   .bar { height:4px; width:90px; background:#ffffff14; border-radius:4px; overflow:hidden; margin-top:4px; } .bar i { display:block; height:100%; width:40%; background:var(--warn); animation:slide 1s infinite linear; } @keyframes slide { from { margin-left:-40%; } to { margin-left:100%; } }
   #log { height:230px; overflow:auto; font:12.5px ui-monospace,Consolas,monospace; background:#04070f; border-radius:12px; padding:12px; }
   #log div { padding:2px 0; animation:in .3s; } @keyframes in { from { opacity:0; transform:translateX(-6px); } }
@@ -82,7 +82,8 @@ let side = 'A', state = null, prev = null;
 
 const healing = {};              // "A|key" -> {start}
 const bucketGone = {};           // "A" -> start
-const fresh = new Set();         // rows to flash
+const fresh = new Set();
+const forced = new Set();        // keys being force-deleted (expected to vanish, don't heal)         // rows to flash
 const $ = id => document.getElementById(id);
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = n => n < 1024 ? n + ' B' : n < 1048576 ? (n/1024).toFixed(1) + ' KB' : (n/1048576).toFixed(1) + ' MB';
@@ -115,7 +116,7 @@ function diff(cur) {
     if (p.up && c.up) {
       const pk = new Set(p.objects.map(x => x.key)), ck = new Set(c.objects.map(x => x.key));
       pk.forEach(k => {
-        if (!ck.has(k) && !healing[s + '|' + k]) {
+        if (!ck.has(k) && !healing[s + '|' + k] && !forced.has(k)) {
           healing[s + '|' + k] = { start: Date.now() };
           log('bad', `🚨 Deletion detected: <b>${esc(k)}</b> removed from ${nm(s,cur)}`);
           if (cur[o].objects.some(x => x.key === k)) log('warn', `📥 Copying <b>${esc(k)}</b> from ${nm(o,cur)} to ${nm(s,cur)}…`);
@@ -175,7 +176,8 @@ function render() {
       return `<tr class="${isNew ? 'new' : ''}"><td class="fn">${esc(x.key)}</td><td>${fmt(x.size)}</td><td class="hide-s">${new Date(x.modified).toLocaleString()}</td>
         <td><span class="pill ${otherKeys.has(x.key) ? 'ok' : 'warn'}">${otherKeys.has(x.key) ? 'mirrored ✓' : 'mirroring…'}</span></td>
         <td style="white-space:nowrap"><button class="btn dl" data-k="${encodeURIComponent(x.key)}">⬇ Download</button>
-        <button class="btn del" data-k="${encodeURIComponent(x.key)}">🗑 Delete</button></td></tr>`;
+        <button class="btn del" data-k="${encodeURIComponent(x.key)}">🗑 Delete</button>
+        <button class="btn force" data-k="${encodeURIComponent(x.key)}" title="Delete from both buckets permanently">💥 Force delete</button></td></tr>`;
     }).join('');
     if (!html) html = `<tr><td colspan="5" class="empty">Empty — upload something above.</td></tr>`;
   }
@@ -196,6 +198,17 @@ $('tabB').onclick = () => { side = 'B'; render(); };
 $('rows').onclick = async e => {
   const d = e.target.closest('button.dl');
   if (d) { const { url } = await (await api(`/api/download-url?side=${side}&key=${d.dataset.k}`)).json(); location.href = url; return; }
+  const f = e.target.closest('button.force');
+  if (f) {
+    const key = decodeURIComponent(f.dataset.k);
+    if (!confirm(`Force delete "${key}" from BOTH buckets?
+All versions are removed permanently and it will NOT be healed.`)) return;
+    forced.add(key); f.disabled = true; f.textContent = 'Deleting…';
+    log('bad', `💥 Force delete started: <b>${esc(key)}</b> (both buckets, all versions)`);
+    const r = await api(`/api/force-delete?key=${encodeURIComponent(key)}&side=A`, { method: 'POST' });
+    log(r.ok ? 'ok' : 'bad', r.ok ? `✅ Force delete done: <b>${esc(key)}</b> removed from Bucket A (${state.A.region}) and Bucket B (${state.B.region}) — will not be restored` : '❌ Force delete failed');
+    setTimeout(() => forced.delete(key), 8000); refresh(); return;
+  }
   const b = e.target.closest('button.del'); if (!b) return;
   const key = decodeURIComponent(b.dataset.k);
   b.disabled = true; b.textContent = 'Deleting…';

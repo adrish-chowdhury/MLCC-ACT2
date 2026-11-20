@@ -17,6 +17,7 @@ LOCAL_REGION = os.environ["LOCAL_REGION"]
 PEER = os.environ["PEER_BUCKET"]
 PEER_REGION = os.environ["PEER_REGION"]
 MARK = "sync-origin"
+TOMB = ".force-deleted/"  # tombstone prefix written by the dashboard's force delete
 
 s3_local = boto3.client("s3", region_name=LOCAL_REGION)
 s3_peer = boto3.client("s3", region_name=PEER_REGION)
@@ -103,6 +104,13 @@ def copy(src_client, src_bucket, dst_client, dst_bucket, key, src_head=None):
     return True
 
 
+def tombstoned(key):
+    """True if a force-delete tombstone exists for key in either bucket."""
+    t = TOMB + key
+    return head(s3_local, LOCAL, t) is not None or (
+        bucket_exists(s3_peer, PEER) and head(s3_peer, PEER, t) is not None)
+
+
 def on_created(key):
     h = head(s3_local, LOCAL, key)
     if h is None or MARK in h.get("Metadata", {}):
@@ -120,6 +128,9 @@ def on_deleted(detail):
     if detail.get("reason") == "Lifecycle Expiration":
         return
     key = detail["object"]["key"]
+    if not key.startswith(TOMB) and tombstoned(key):
+        print(f"{key} was force-deleted; not healing")
+        return
     if detail.get("deletion-type") == "Delete Marker Created":
         # Removing the marker un-deletes the previous version, even if peer also lost it.
         vid = detail["object"].get("version-id")
@@ -138,11 +149,15 @@ def reconcile(context):
         print("peer bucket missing; its healer will rebuild it")
         return
     local_keys = set()
+    dead = set()
+    for c, b in ((s3_local, LOCAL), (s3_peer, PEER)):
+        for page in c.get_paginator("list_objects_v2").paginate(Bucket=b, Prefix=TOMB):
+            dead.update(o["Key"][len(TOMB):] for o in page.get("Contents", []))
     for page in s3_local.get_paginator("list_objects_v2").paginate(Bucket=LOCAL):
         local_keys.update(o["Key"] for o in page.get("Contents", []))
     for page in s3_peer.get_paginator("list_objects_v2").paginate(Bucket=PEER):
         for o in page.get("Contents", []):
-            if o["Key"] in local_keys:
+            if o["Key"] in local_keys or o["Key"] in dead:
                 continue
             if context.get_remaining_time_in_millis() < 30000:
                 print("running out of time; next run continues")

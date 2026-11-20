@@ -38,7 +38,7 @@ resource "aws_iam_role_policy" "api_s3" {
     Version = "2012-10-17"
     Statement = [{
       Effect = "Allow"
-      Action = ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+      Action = ["s3:ListBucket", "s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:ListBucketVersions"]
       Resource = [
         "arn:aws:s3:::${local.bucket_a}", "arn:aws:s3:::${local.bucket_a}/*",
         "arn:aws:s3:::${local.bucket_b}", "arn:aws:s3:::${local.bucket_b}/*",
