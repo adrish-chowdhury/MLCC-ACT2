@@ -1,10 +1,5 @@
 # Shareable dashboard: one Lambda behind an HTTPS Function URL serves the page + API.
 # Data access is gated by a shared access code.
-resource "random_password" "access_code" {
-  length  = 12
-  special = false
-}
-
 data "archive_file" "api" {
   type        = "zip"
   source_dir  = "${path.root}/../dashboard"
@@ -64,7 +59,7 @@ resource "aws_lambda_function" "api" {
       REGION_A    = var.region_a
       BUCKET_B    = local.bucket_b
       REGION_B    = var.region_b
-      ACCESS_CODE = random_password.access_code.result
+      ACCESS_CODE = var.access_code
     }
   }
 }

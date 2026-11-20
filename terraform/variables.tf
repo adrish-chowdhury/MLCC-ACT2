@@ -24,3 +24,9 @@ variable "reconcile_schedule" {
   type    = string
   default = "rate(5 minutes)"
 }
+
+variable "access_code" {
+  type        = string
+  sensitive   = true
+  description = "Shared access code for the dashboard. Set it in terraform.tfvars (git-ignored)."
+}

@@ -9,8 +9,3 @@ output "bucket_b" {
 output "dashboard_url" {
   value = aws_lambda_function_url.api.function_url
 }
-
-output "access_code" {
-  value     = random_password.access_code.result
-  sensitive = true
-}
