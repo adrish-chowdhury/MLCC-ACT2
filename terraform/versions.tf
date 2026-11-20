@@ -17,6 +17,6 @@ provider "aws" {
 }
 
 provider "aws" {
-  alias  = "app"
-  region = var.app_region
+  alias  = "site"
+  region = var.site_region
 }

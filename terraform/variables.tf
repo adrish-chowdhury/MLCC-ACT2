@@ -25,30 +25,13 @@ variable "reconcile_schedule" {
   default = "rate(5 minutes)"
 }
 
-# ---- optional app host (EC2) ----
-variable "deploy_app" {
-  type    = bool
-  default = true
-}
-
-variable "app_region" {
+variable "site_region" {
   type    = string
   default = "us-east-1"
 }
 
-variable "repo_url" {
-  type    = string
-  default = "https://github.com/adrish-chowdhury/MLCC-ACT2.git"
-}
-
-variable "gemini_api_key" {
-  type      = string
-  default   = ""
-  sensitive = true
-}
-
-variable "allowed_cidr" {
+variable "site_dist_dir" {
   type        = string
-  default     = "0.0.0.0/0"
-  description = "Who may reach the app on port 3000. Restrict to your IP/32 for testing."
+  default     = "../dist"
+  description = "Output of `npm run build` (run it first)."
 }
