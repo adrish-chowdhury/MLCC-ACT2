@@ -4,12 +4,10 @@ One copy of this Lambda runs next to each bucket (LOCAL_*), with the other
 bucket as PEER_*. It:
   * mirrors new/changed objects LOCAL -> PEER
   * restores any object deleted from LOCAL (marker or permanent) from PEER
-  * recreates LOCAL if the bucket itself was deleted, then refills it from PEER
   * runs a periodic reconcile that pulls anything missing from PEER
 Copies carry metadata 'sync-origin' so they never trigger another copy (no loops).
 """
 import os
-import time
 import boto3
 from botocore.exceptions import ClientError
 
@@ -43,55 +41,6 @@ def bucket_exists(client, bucket):
         if e.response["Error"]["Code"] in NOT_FOUND:
             return False
         raise
-
-
-def ensure_local_bucket(context=None):
-    """Recreate the local bucket (with versioning/events) if it is gone."""
-    if bucket_exists(s3_local, LOCAL):
-        return False
-    print(f"Bucket {LOCAL} missing - recreating")
-    kwargs = {"Bucket": LOCAL}
-    if LOCAL_REGION != "us-east-1":
-        kwargs["CreateBucketConfiguration"] = {"LocationConstraint": LOCAL_REGION}
-    # S3 keeps a just-deleted name reserved for a while (BucketAlreadyExists / OperationAborted):
-    # keep retrying until the name is released or we run out of time.
-    while True:
-        try:
-            s3_local.create_bucket(**kwargs)
-            break
-        except ClientError as e:
-            code = e.response["Error"]["Code"]
-            if code == "BucketAlreadyOwnedByYou":
-                break
-            if code not in ("BucketAlreadyExists", "OperationAborted", "ServiceUnavailable", "SlowDown"):
-                raise
-            if context is None or context.get_remaining_time_in_millis() < 15000:
-                raise
-            print(f"name not released yet ({code}); retrying")
-            time.sleep(3)
-    s3_local.put_bucket_versioning(Bucket=LOCAL, VersioningConfiguration={"Status": "Enabled"})
-    s3_local.put_public_access_block(
-        Bucket=LOCAL,
-        PublicAccessBlockConfiguration={
-            "BlockPublicAcls": True,
-            "IgnorePublicAcls": True,
-            "BlockPublicPolicy": True,
-            "RestrictPublicBuckets": True,
-        },
-    )
-    s3_local.put_bucket_cors(
-        Bucket=LOCAL,
-        CORSConfiguration={"CORSRules": [{
-            "AllowedOrigins": ["*"],
-            "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
-            "AllowedHeaders": ["*"],
-            "ExposeHeaders": ["ETag"],
-        }]},
-    )
-    s3_local.put_bucket_notification_configuration(
-        Bucket=LOCAL, NotificationConfiguration={"EventBridgeConfiguration": {}}
-    )
-    return True
 
 
 def copy(src_client, src_bucket, dst_client, dst_bucket, key, src_head=None):
@@ -129,7 +78,7 @@ def on_created(key):
     if h is None or MARK in h.get("Metadata", {}):
         return
     if not bucket_exists(s3_peer, PEER):
-        print("peer bucket missing; its healer will rebuild it")
+        print("peer bucket missing; skipping mirror")
         return
     ph = head(s3_peer, PEER, key)
     if ph and ph["ETag"] == h["ETag"]:
@@ -159,9 +108,8 @@ def on_deleted(detail):
 
 
 def reconcile(context):
-    ensure_local_bucket(context)
-    if not bucket_exists(s3_peer, PEER):
-        print("peer bucket missing; its healer will rebuild it")
+    if not bucket_exists(s3_local, LOCAL) or not bucket_exists(s3_peer, PEER):
+        print("a bucket is missing; bucket recreation is not supported, skipping")
         return
     local_keys = set()
     dead = set()
@@ -187,5 +135,5 @@ def handler(event, context):
         on_created(detail["object"]["key"])
     elif dt == "Object Deleted":
         on_deleted(detail)
-    else:  # scheduled run or DeleteBucket API call
+    else:  # scheduled run
         reconcile(context)

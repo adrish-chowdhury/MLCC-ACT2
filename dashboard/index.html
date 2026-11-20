@@ -110,9 +110,8 @@ function diff(cur) {
     if (p.up && !c.up) {
       bucketGone[s] = Date.now();
       log('bad', `🚨 Deletion detected: ${nm(s,cur)} no longer exists`);
-      if (cur[o].up) log('warn', `📥 Recreating ${nm(s,cur)} and copying data from ${nm(o,cur)}…`);
     }
-    if (!p.up && c.up) { log('ok', `✅ Recovery done: ${nm(s,cur)} recreated${bucketGone[s] ? ' in ' + secs(bucketGone[s]) : ''}`); delete bucketGone[s]; }
+    if (!p.up && c.up) { log('info', `🟢 ${nm(s,cur)} is available`); delete bucketGone[s]; }
     if (p.up && c.up) {
       const pk = new Set(p.objects.map(x => x.key)), ck = new Set(c.objects.map(x => x.key));
       pk.forEach(k => {
@@ -152,7 +151,7 @@ function render() {
     if (!el.dataset.built) { el.innerHTML = `<div class="top"><span>Bucket ${s}</span><span class="pill"></span></div><div class="n"><span class="num">0</span> <small>objects</small></div><div class="mute"></div>`; el.dataset.built = 1; }
     const pill = el.querySelector('.pill');
     pill.className = 'pill ' + (!b.up ? 'bad' : busy ? 'warn' : 'ok');
-    pill.textContent = !b.up ? 'MISSING · healing' : busy ? 'recovering…' : 'healthy';
+    pill.textContent = !b.up ? 'MISSING' : busy ? 'recovering…' : 'healthy';
     counter(el.querySelector('.num'), b.objects.length);
     el.querySelector('.mute').textContent = `${b.region} · ${b.name}`;
     el.classList.toggle('active', s === side); el.classList.toggle('heal', busy);
@@ -167,7 +166,7 @@ function render() {
   const otherKeys = new Set(o.objects.map(x => x.key));
   const ghosts = Object.keys(healing).filter(k => k.startsWith(side + '|')).map(k => k.slice(2));
   let html = '';
-  if (!cur.up) html = `<tr><td colspan="5" class="empty"><span class="pill bad">Deletion detected</span> ${nm(side)} is gone — copying data from ${nm(other(side))} <div class="bar" style="margin:8px auto"><i></i></div></td></tr>`;
+  if (!cur.up) html = `<tr><td colspan="5" class="empty"><span class="pill bad">Bucket missing</span> ${nm(side)} does not exist</td></tr>`;
   else {
     html += ghosts.map(k => `<tr class="healing"><td class="fn">${esc(k)}</td><td>—</td><td class="hide-s">—</td>
       <td><span class="pill warn">deletion detected</span><br><span class="mute">copying from Bucket ${other(side)}…</span><div class="bar"><i></i></div></td><td></td></tr>`).join('');

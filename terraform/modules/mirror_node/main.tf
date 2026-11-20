@@ -73,9 +73,7 @@ resource "aws_iam_role_policy" "s3" {
       Effect = "Allow"
       Action = [
         "s3:ListBucket", "s3:GetBucketLocation", "s3:GetObject", "s3:GetObjectVersion",
-        "s3:PutObject", "s3:DeleteObjectVersion",
-        "s3:CreateBucket", "s3:PutBucketVersioning", "s3:PutBucketPublicAccessBlock",
-        "s3:PutBucketNotification", "s3:PutBucketCors", "s3:PutEncryptionConfiguration"
+        "s3:PutObject", "s3:DeleteObjectVersion"
       ]
       Resource = [
         "arn:aws:s3:::${var.bucket_name}", "arn:aws:s3:::${var.bucket_name}/*",
@@ -115,19 +113,6 @@ locals {
         source        = ["aws.s3"]
         "detail-type" = ["Object Created", "Object Deleted"]
         detail        = { bucket = { name = [var.bucket_name] } }
-      })
-      schedule = null
-    }
-    bucket_deleted = {
-      description = "DeleteBucket called on ${var.bucket_name} (console, CLI, anything)"
-      pattern = jsonencode({
-        source        = ["aws.s3"]
-        "detail-type" = ["AWS API Call via CloudTrail"]
-        detail = {
-          eventSource       = ["s3.amazonaws.com"]
-          eventName         = ["DeleteBucket"]
-          requestParameters = { bucketName = [var.bucket_name] }
-        }
       })
       schedule = null
     }
