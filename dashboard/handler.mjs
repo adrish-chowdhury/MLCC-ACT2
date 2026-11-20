@@ -58,11 +58,15 @@ export const handler = async (event) => {
     if (!BUCKETS[side] || !key) return reply(400, { error: "bad request" });
     const Bucket = BUCKETS[side].name;
     if (path === "/api/force-delete" && method === "POST") {
-      // 1) tombstone in BOTH buckets so the healers leave this key alone, 2) purge every version, 3) sweep again
+      // 1) temporary tombstone in BOTH buckets so the healers leave this key alone,
+      // 2) purge every version (repeatedly, to beat in-flight copies), 3) remove the tombstones again
+      const wait = ms => new Promise(r => setTimeout(r, ms));
       for (const sd of ["A", "B"]) await clients[sd].send(new PutObjectCommand({ Bucket: BUCKETS[sd].name, Key: TOMB + key, Body: "" }));
-      for (const sd of ["A", "B"]) await purge(sd, key);
-      await new Promise(r => setTimeout(r, 2500));
-      for (const sd of ["A", "B"]) await purge(sd, key);
+      for (let i = 0; i < 3; i++) {
+        for (const sd of ["A", "B"]) await purge(sd, key);
+        if (i < 2) await wait(4000);
+      }
+      for (const sd of ["A", "B"]) await purge(sd, TOMB + key);
       return reply(200, { ok: true });
     }
     if (path === "/api/upload-url") {

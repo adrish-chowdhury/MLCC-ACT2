@@ -112,6 +112,8 @@ def tombstoned(key):
 
 
 def on_created(key):
+    if key.startswith(TOMB):
+        return
     h = head(s3_local, LOCAL, key)
     if h is None or MARK in h.get("Metadata", {}):
         return
@@ -128,7 +130,9 @@ def on_deleted(detail):
     if detail.get("reason") == "Lifecycle Expiration":
         return
     key = detail["object"]["key"]
-    if not key.startswith(TOMB) and tombstoned(key):
+    if key.startswith(TOMB):
+        return  # tombstones are managed only by the dashboard API
+    if tombstoned(key):
         print(f"{key} was force-deleted; not healing")
         return
     if detail.get("deletion-type") == "Delete Marker Created":
