@@ -9,6 +9,7 @@ bucket as PEER_*. It:
 Copies carry metadata 'sync-origin' so they never trigger another copy (no loops).
 """
 import os
+import time
 import boto3
 from botocore.exceptions import ClientError
 
@@ -44,7 +45,7 @@ def bucket_exists(client, bucket):
         raise
 
 
-def ensure_local_bucket():
+def ensure_local_bucket(context=None):
     """Recreate the local bucket (with versioning/events) if it is gone."""
     if bucket_exists(s3_local, LOCAL):
         return False
@@ -52,12 +53,22 @@ def ensure_local_bucket():
     kwargs = {"Bucket": LOCAL}
     if LOCAL_REGION != "us-east-1":
         kwargs["CreateBucketConfiguration"] = {"LocationConstraint": LOCAL_REGION}
-    try:
-        s3_local.create_bucket(**kwargs)
-    except ClientError as e:
-        # OperationAborted while the name is still being released: next reconcile retries
-        if e.response["Error"]["Code"] != "BucketAlreadyOwnedByYou":
-            raise
+    # S3 keeps a just-deleted name reserved for a while (BucketAlreadyExists / OperationAborted):
+    # keep retrying until the name is released or we run out of time.
+    while True:
+        try:
+            s3_local.create_bucket(**kwargs)
+            break
+        except ClientError as e:
+            code = e.response["Error"]["Code"]
+            if code == "BucketAlreadyOwnedByYou":
+                break
+            if code not in ("BucketAlreadyExists", "OperationAborted", "ServiceUnavailable", "SlowDown"):
+                raise
+            if context is None or context.get_remaining_time_in_millis() < 15000:
+                raise
+            print(f"name not released yet ({code}); retrying")
+            time.sleep(3)
     s3_local.put_bucket_versioning(Bucket=LOCAL, VersioningConfiguration={"Status": "Enabled"})
     s3_local.put_public_access_block(
         Bucket=LOCAL,
@@ -148,7 +159,7 @@ def on_deleted(detail):
 
 
 def reconcile(context):
-    ensure_local_bucket()
+    ensure_local_bucket(context)
     if not bucket_exists(s3_peer, PEER):
         print("peer bucket missing; its healer will rebuild it")
         return
