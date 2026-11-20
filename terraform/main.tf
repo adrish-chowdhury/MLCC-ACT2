@@ -3,8 +3,8 @@ data "aws_caller_identity" "me" {
 }
 
 locals {
-  bucket_a = "${var.bucket_prefix}-a-${data.aws_caller_identity.me.account_id}"
-  bucket_b = "${var.bucket_prefix}-b-${data.aws_caller_identity.me.account_id}"
+  bucket_a = "${var.bucket_prefix}-${var.region_a}-${data.aws_caller_identity.me.account_id}"
+  bucket_b = "${var.bucket_prefix}-${var.region_b}-${data.aws_caller_identity.me.account_id}"
 }
 
 # Each node owns one bucket + one healer Lambda in its own region.

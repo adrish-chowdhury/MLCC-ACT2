@@ -67,6 +67,15 @@ def ensure_local_bucket():
             "RestrictPublicBuckets": True,
         },
     )
+    s3_local.put_bucket_cors(
+        Bucket=LOCAL,
+        CORSConfiguration={"CORSRules": [{
+            "AllowedOrigins": ["*"],
+            "AllowedMethods": ["GET", "PUT", "POST", "DELETE", "HEAD"],
+            "AllowedHeaders": ["*"],
+            "ExposeHeaders": ["ETag"],
+        }]},
+    )
     s3_local.put_bucket_notification_configuration(
         Bucket=LOCAL, NotificationConfiguration={"EventBridgeConfiguration": {}}
     )

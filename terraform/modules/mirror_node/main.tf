@@ -25,6 +25,16 @@ resource "aws_s3_bucket_public_access_block" "this" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_cors_configuration" "this" {
+  bucket = aws_s3_bucket.this.id
+  cors_rule {
+    allowed_origins = ["*"]
+    allowed_methods = ["GET", "PUT", "POST", "DELETE", "HEAD"]
+    allowed_headers = ["*"]
+    expose_headers  = ["ETag"]
+  }
+}
+
 # Send object events to EventBridge (default bus)
 resource "aws_s3_bucket_notification" "this" {
   bucket      = aws_s3_bucket.this.id
@@ -65,7 +75,7 @@ resource "aws_iam_role_policy" "s3" {
         "s3:ListBucket", "s3:GetBucketLocation", "s3:GetObject", "s3:GetObjectVersion",
         "s3:PutObject", "s3:DeleteObjectVersion",
         "s3:CreateBucket", "s3:PutBucketVersioning", "s3:PutBucketPublicAccessBlock",
-        "s3:PutBucketNotification", "s3:PutEncryptionConfiguration"
+        "s3:PutBucketNotification", "s3:PutBucketCors", "s3:PutEncryptionConfiguration"
       ]
       Resource = [
         "arn:aws:s3:::${var.bucket_name}", "arn:aws:s3:::${var.bucket_name}/*",

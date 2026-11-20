@@ -10,8 +10,8 @@ variable "region_b" {
 
 variable "bucket_prefix" {
   type        = string
-  default     = "mlcc-act2"
-  description = "Buckets become <prefix>-a-<account-id> and <prefix>-b-<account-id>"
+  default     = "self-healing"
+  description = "Buckets become <prefix>-<region>-<account-id>"
 }
 
 variable "healing_enabled" {
@@ -23,15 +23,4 @@ variable "healing_enabled" {
 variable "reconcile_schedule" {
   type    = string
   default = "rate(5 minutes)"
-}
-
-variable "site_region" {
-  type    = string
-  default = "us-east-1"
-}
-
-variable "site_dist_dir" {
-  type        = string
-  default     = "../dist"
-  description = "Output of `npm run build` (run it first)."
 }
